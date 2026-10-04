@@ -10,7 +10,13 @@ import { useToast } from 'primevue/usetoast'
 import PageHeader from '@/components/PageHeader.vue'
 import StatusTag from '@/components/StatusTag.vue'
 import type { ActorRole, DecisionType, Threat } from '@/models/domain'
-import { decisionsForThreat, reviewProgress } from '@/services/selectors'
+import {
+  activeImportBatch,
+  batchConclusion,
+  decisionsForThreat,
+  reviewProgress,
+  reviewThreatIdsFromBatch,
+} from '@/services/selectors'
 import { useThreatModelStore } from '@/stores/threatModel'
 
 const store = useThreatModelStore()
@@ -44,8 +50,17 @@ const form = reactive<{
 })
 
 const latestVersion = computed(() => store.data.versions[0])
+/** 版本差异页与会签中心读取同一导入批次结论（无批次时回退版本快照口径） */
+const activeBatch = computed(() => activeImportBatch(store.data))
+const activeConclusion = computed(() => batchConclusion(activeBatch.value))
+const batchScopedIds = computed(() =>
+  reviewThreatIdsFromBatch(store.data, activeBatch.value),
+)
 const affectedThreats = computed(() => {
-  const ids = latestVersion.value?.affectedThreatIds ?? store.data.threats.map((threat) => threat.id)
+  const ids =
+    batchScopedIds.value ??
+    latestVersion.value?.affectedThreatIds ??
+    store.data.threats.map((threat) => threat.id)
   return store.data.threats.filter((threat) => ids.includes(threat.id))
 })
 const selectedThreat = computed(
@@ -107,23 +122,26 @@ const decisionLabel = (decision: DecisionType | 'pending'): string =>
     <PageHeader
       eyebrow="受影响范围"
       title="逐项会签中心"
-      :description="`当前版本 ${latestVersion?.label ?? '未建立'} 仅展示受变更影响、需要重新审核的威胁。`"
+      :description="activeConclusion
+        ? `按导入批次「${activeBatch?.label ?? ''}」结论限定会签范围，与版本差异页读取同一批次结论。`
+        : `当前版本 ${latestVersion?.label ?? '未建立'} 仅展示受变更影响、需要重新审核的威胁。`"
     />
 
     <section class="version-context">
       <div>
         <span>审核基线</span>
-        <strong>{{ latestVersion?.label ?? '尚未建立版本' }}</strong>
+        <strong>{{ activeConclusion ? activeBatch?.label : (latestVersion?.label ?? '尚未建立版本') }}</strong>
       </div>
       <div>
         <span>受影响威胁</span>
         <strong>{{ affectedThreats.length }} 条</strong>
       </div>
       <div>
-        <span>创建时间</span>
-        <strong>
-          {{ latestVersion ? new Date(latestVersion.createdAt).toLocaleString('zh-CN') : '-' }}
+        <span>批次写入 / 失效接受</span>
+        <strong v-if="activeConclusion">
+          {{ activeConclusion.appliedCount }} 条 · {{ activeConclusion.invalidatedRiskIds.length }} 条
         </strong>
+        <strong v-else>无导入批次</strong>
       </div>
     </section>
 

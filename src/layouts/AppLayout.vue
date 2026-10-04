@@ -17,6 +17,7 @@ const navigation = [
   { label: '会签中心', icon: 'pi pi-verified', to: '/reviews' },
   { label: '版本差异', icon: 'pi pi-code', to: '/versions' },
   { label: '控制证据', icon: 'pi pi-folder-open', to: '/evidence' },
+  { label: '交换包导入', icon: 'pi pi-box', to: '/imports' },
   { label: '导出报告', icon: 'pi pi-file-export', to: '/report' },
 ]
 
@@ -78,6 +79,13 @@ const reset = (): void => {
         </div>
       </header>
       <section class="content-shell">
+        <div v-if="store.recoveryNotice" class="global-recovery" @click="router.push('/imports')">
+          <i class="pi pi-history"></i>
+          <span>
+            导入批次写入中断，已保留完整检查点（{{ store.recoveryNotice.appliedCount
+            }}/{{ store.recoveryNotice.totalCount }}），点击前往续做。
+          </span>
+        </div>
         <RouterView />
       </section>
     </main>
@@ -231,5 +239,23 @@ const reset = (): void => {
 .content-shell {
   max-width: 1560px;
   padding: 24px;
+}
+
+.global-recovery {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid #e0b341;
+  border-radius: 6px;
+  color: #7a5a12;
+  background: #fff8e6;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.global-recovery:hover {
+  background: #fdf2d0;
 }
 </style>

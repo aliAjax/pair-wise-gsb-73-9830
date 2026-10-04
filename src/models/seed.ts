@@ -515,5 +515,19 @@ export const createSeedState = (): ThreatModelState => ({
   decisions,
   versions: baselineVersions,
   audit,
+  importBatches: [],
+  acceptanceHistory: [
+    {
+      id: 'bas-01',
+      riskId: 'risk-03',
+      riskCode: 'R-003',
+      type: 'accepted',
+      condition: '过渡期内按日抽检导出记录，发现异常立即冻结账号。',
+      expiresAt: '2026-10-01',
+      reason: '月结窗口前业务连续运行需要，补偿控制为按日抽检。',
+      createdAt: '2026-09-15T10:20:00+08:00',
+      createdBy: '宋雨',
+    },
+  ],
   currentRevision: 2,
 })

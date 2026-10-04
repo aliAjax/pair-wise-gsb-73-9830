@@ -1,5 +1,8 @@
 import type {
+  AcceptanceBasis,
+  BatchConclusion,
   ControlEvidence,
+  ImportBatch,
   ReviewDecision,
   Risk,
   Severity,
@@ -25,6 +28,21 @@ export const isExpired = (date?: string): boolean =>
   Boolean(date && new Date(`${date}T23:59:59+08:00`).getTime() < TODAY.getTime())
 
 export const evidenceIsExpired = (evidence: ControlEvidence): boolean => isExpired(evidence.expiresAt)
+
+/**
+ * 风险接受是否仍然成立：威胁或证据一变即被判定失效（acceptanceInvalidatedAt），
+ * 即使未到期也不再算作有效接受，需要重新评审确认。
+ */
+export const isRiskAcceptanceActive = (risk: Risk): boolean =>
+  risk.status === 'accepted' &&
+  !risk.acceptanceInvalidatedAt &&
+  !isExpired(risk.acceptanceExpiresAt)
+
+/** 当前风险接受的依据（最近一次接受/重新确认/失效留痕） */
+export const acceptanceBasisFor = (
+  history: AcceptanceBasis[],
+  riskId: string,
+): AcceptanceBasis | null => history.find((basis) => basis.riskId === riskId) ?? null
 
 export const getValidationIssues = (state: ThreatModelState): ValidationIssue[] => {
   const issues: ValidationIssue[] = []
@@ -99,6 +117,19 @@ export const getValidationIssues = (state: ThreatModelState): ValidationIssue[] 
         severity: riskLevel(riskScore(risk)),
         title: `${risk.code} 风险接受已过期`,
         detail: `接受到期日为 ${risk.acceptanceExpiresAt ?? '未设置'}，需要重新评审或转为处置。`,
+        entityId: risk.id,
+      })
+    })
+
+  state.risks
+    .filter((risk) => Boolean(risk.acceptanceInvalidatedAt))
+    .forEach((risk) => {
+      issues.push({
+        id: `invalidated-acceptance-${risk.id}`,
+        kind: 'risk_acceptance_invalidated',
+        severity: riskLevel(riskScore(risk)),
+        title: `${risk.code} 风险接受已失效待重算`,
+        detail: risk.acceptanceInvalidatedReason ?? '关联威胁或控制证据发生变更，接受前提不再成立。',
         entityId: risk.id,
       })
     })
@@ -218,3 +249,51 @@ export const dashboardMetrics = (state: ThreatModelState): DashboardMetrics => (
   openIssues: getValidationIssues(state).length,
   pendingReviews: state.threats.filter((threat) => threat.reviewStatus === 'in_review').length,
 })
+
+// ---------------------------------------------------------------------------
+// 导入批次：版本差异页与会签中心读取同一批次结论（唯一事实来源）
+// ---------------------------------------------------------------------------
+
+/** 当前活动的导入批次（未完成的最近批次优先），没有则回退到最近完成批次 */
+export const activeImportBatch = (state: ThreatModelState): ImportBatch | null => {
+  const ordered = [...state.importBatches].sort((a, b) => (a.createdAt < b.createdAt ? 1 : -1))
+  return (
+    ordered.find(
+      (batch) => batch.phase === 'reconciling' || batch.phase === 'interrupted' || batch.phase === 'applying',
+    ) ??
+    ordered.find((batch) => batch.phase === 'completed' && batch.conclusion) ??
+    null
+  )
+}
+
+/**
+ * 两个页面共用的批次结论。优先读取批次完成时固化的结论；
+ * 进行中的批次则实时计算（不写回），保证打开任意页面看到的是同一口径。
+ */
+export const batchConclusion = (batch: ImportBatch | null): BatchConclusion | null => {
+  if (!batch) return null
+  if (batch.conclusion) return batch.conclusion
+  const applied = batch.items.filter((item) => item.status === 'applied')
+  return {
+    threatIds: [...new Set(applied.filter((item) => item.kind === 'threat').map((item) => item.entityId))],
+    threatCount: batch.items.filter((item) => item.kind === 'threat').length,
+    evidenceCount: batch.items.filter((item) => item.kind === 'evidence').length,
+    riskCount: batch.items.filter((item) => item.kind === 'risk').length,
+    appliedCount: applied.length,
+    conflictResolvedCount: batch.items.filter((item) => item.resolution).length,
+    invalidatedRiskIds: [],
+    atRevision: batch.baseRevision,
+  }
+}
+
+/** 会签中心据此限定范围：批次结论中实际应用的威胁；无批次时回退版本逻辑 */
+export const reviewThreatIdsFromBatch = (
+  state: ThreatModelState,
+  batch: ImportBatch | null,
+): string[] | null => {
+  const conclusion = batchConclusion(batch)
+  if (!conclusion) return null
+  // 只保留当前仍存在于模型中的威胁
+  const present = new Set(state.threats.map((threat) => threat.id))
+  return conclusion.threatIds.filter((id) => present.has(id))
+}

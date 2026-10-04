@@ -10,7 +10,11 @@ import Textarea from 'primevue/textarea'
 import { useToast } from 'primevue/usetoast'
 import PageHeader from '@/components/PageHeader.vue'
 import type { VersionChange, VersionSnapshot } from '@/models/domain'
-import { compareSnapshots } from '@/services/selectors'
+import {
+  activeImportBatch,
+  batchConclusion,
+  compareSnapshots,
+} from '@/services/selectors'
 import { useThreatModelStore } from '@/stores/threatModel'
 
 const store = useThreatModelStore()
@@ -23,6 +27,9 @@ const createForm = reactive({
   notes: '',
   affectedThreatIds: [] as string[],
 })
+
+const activeBatch = computed(() => activeImportBatch(store.data))
+const activeConclusion = computed(() => batchConclusion(activeBatch.value))
 
 const fromVersion = computed(
   () => store.data.versions.find((version) => version.id === fromVersionId.value) ?? null,
@@ -92,6 +99,11 @@ const approvalLabel = (snapshot: VersionSnapshot): string =>
     const threat = store.data.threats.find((item) => item.id === id)
     return threat?.reviewStatus === 'approved'
   }).length}/${snapshot.affectedThreatIds.length}`
+
+const threatChipLabel = (id: string): string => {
+  const threat = store.data.threats.find((item) => item.id === id)
+  return threat ? `${threat.code} ${threat.title}` : id
+}
 </script>
 
 <template>
@@ -101,6 +113,29 @@ const approvalLabel = (snapshot: VersionSnapshot): string =>
       title="版本差异"
       description="比较模型基线，识别组件、数据流、控制与风险变化，并限定重新审核的威胁范围。"
     />
+
+    <section v-if="activeBatch" class="panel batch-conclusion-panel">
+      <div class="panel-header">
+        <div>
+          <h2 class="panel-title">导入批次结论</h2>
+          <span class="muted">{{ activeBatch.label }} · {{ activeBatch.sentBy }} · 预对账基线 r{{ activeBatch.baseRevision }}</span>
+        </div>
+        <RouterLink class="batch-link" to="/imports">查看批次明细</RouterLink>
+      </div>
+      <div class="batch-conclusion-grid">
+        <div><span>威胁 / 证据 / 风险接受</span><strong>{{ activeConclusion?.threatCount ?? 0 }} / {{ activeConclusion?.evidenceCount ?? 0 }} / {{ activeConclusion?.riskCount ?? 0 }}</strong></div>
+        <div><span>实际写入</span><strong>{{ activeConclusion?.appliedCount ?? 0 }}</strong></div>
+        <div><span>冲突裁决（两版留档）</span><strong>{{ activeConclusion?.conflictResolvedCount ?? 0 }}</strong></div>
+        <div><span>风险接受失效重算</span><strong class="danger-text">{{ activeConclusion?.invalidatedRiskIds.length ?? 0 }}</strong></div>
+      </div>
+      <div v-if="(activeConclusion?.threatIds.length ?? 0) > 0" class="conclusion-threats">
+        <span class="muted">进入会签范围的威胁：</span>
+        <template v-for="id in activeConclusion?.threatIds" :key="id">
+          <span class="conclusion-chip">{{ threatChipLabel(id) }}</span>
+        </template>
+      </div>
+      <p class="conclusion-note muted">会签中心按同一份批次结论限定审核范围，两处口径一致。</p>
+    </section>
 
     <section class="panel">
       <div class="panel-header">
@@ -238,6 +273,66 @@ const approvalLabel = (snapshot: VersionSnapshot): string =>
 </template>
 
 <style scoped>
+.batch-conclusion-panel {
+  border-left: 3px solid #2f6e52;
+}
+
+.batch-link {
+  color: #2f6e52;
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.batch-conclusion-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1px;
+  margin: 14px 16px 0;
+  overflow: hidden;
+  border: 1px solid #e2e6ec;
+  border-radius: 6px;
+  background: #e2e6ec;
+}
+
+.batch-conclusion-grid > div {
+  display: grid;
+  gap: 5px;
+  padding: 11px 13px;
+  background: #fafbfc;
+}
+
+.batch-conclusion-grid span {
+  color: #717c90;
+  font-size: 11px;
+}
+
+.batch-conclusion-grid strong {
+  font-size: 18px;
+}
+
+.conclusion-threats {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding: 13px 16px 4px;
+  font-size: 12px;
+}
+
+.conclusion-chip {
+  padding: 3px 9px;
+  border-radius: 999px;
+  color: #2f6e52;
+  background: #e7f5ee;
+  font-size: 11px;
+}
+
+.conclusion-note {
+  margin: 0;
+  padding: 8px 16px 14px;
+  font-size: 11px;
+}
+
 .compare-toolbar {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 40px minmax(0, 1fr);

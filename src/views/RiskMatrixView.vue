@@ -10,7 +10,7 @@ import { useToast } from 'primevue/usetoast'
 import PageHeader from '@/components/PageHeader.vue'
 import StatusTag from '@/components/StatusTag.vue'
 import type { Risk } from '@/models/domain'
-import { riskLevel, riskScore } from '@/services/selectors'
+import { acceptanceBasisFor, isRiskAcceptanceActive, riskLevel, riskScore } from '@/services/selectors'
 import { useThreatModelStore } from '@/stores/threatModel'
 
 const store = useThreatModelStore()
@@ -49,6 +49,23 @@ const submitAcceptance = (): void => {
   store.acceptRisk(selectedRiskId.value, acceptanceForm.expiresAt, acceptanceForm.condition)
   acceptanceVisible.value = false
   toast.add({ severity: 'success', summary: '风险接受已记录', detail: '已写入审计轨迹', life: 2500 })
+}
+
+const invalidatedRisks = computed(() =>
+  store.data.risks.filter((risk) => Boolean(risk.acceptanceInvalidatedAt)),
+)
+
+const latestBasis = (risk: Risk) => acceptanceBasisFor(store.data.acceptanceHistory, risk.id)
+
+const acceptanceStateLabel = (risk: Risk): string =>
+  risk.acceptanceInvalidatedAt
+    ? '接受已失效'
+    : isRiskAcceptanceActive(risk)
+      ? '接受中'
+      : risk.status
+
+const reopenAcceptance = (risk: Risk): void => {
+  openAcceptance(risk)
 }
 </script>
 
@@ -113,14 +130,25 @@ const submitAcceptance = (): void => {
             </template>
           </Column>
           <Column field="owner" header="负责人" style="width: 135px" />
-          <Column header="状态" style="width: 100px">
+          <Column header="状态" style="width: 120px">
             <template #body="{ data }">
-              <StatusTag :value="data.status" kind="status" />
+              <StatusTag
+                :value="data.acceptanceInvalidatedAt ? 'rejected' : data.status"
+                :kind="data.acceptanceInvalidatedAt ? 'review' : 'status'"
+              />
+              <div v-if="data.acceptanceInvalidatedAt" class="invalid-hint">
+                {{ acceptanceStateLabel(data) }}
+              </div>
             </template>
           </Column>
-          <Column header="操作" style="width: 180px">
+          <Column header="操作" style="width: 210px">
             <template #body="{ data }">
-              <Button label="接受" size="small" text @click="openAcceptance(data)" />
+              <Button
+                :label="data.acceptanceInvalidatedAt ? '重新确认' : '接受'"
+                size="small"
+                text
+                @click="reopenAcceptance(data)"
+              />
               <Button label="关闭" size="small" text @click="store.closeRisk(data.id)" />
             </template>
           </Column>
@@ -129,6 +157,22 @@ const submitAcceptance = (): void => {
 
       <aside class="validation-panel">
         <h2>风险校验</h2>
+        <article
+          v-for="risk in invalidatedRisks"
+          :key="`invalidated-${risk.id}`"
+          class="validation-item error"
+        >
+          <i class="validation-dot"></i>
+          <div class="validation-copy">
+            <strong>{{ risk.code }} 风险接受已失效，需重算</strong>
+            <p>{{ risk.acceptanceInvalidatedReason }}</p>
+            <p v-if="latestBasis(risk)" class="basis-note">
+              原接受依据保留：{{ latestBasis(risk)?.condition }}（有效至
+              {{ latestBasis(risk)?.expiresAt ?? '未设置' }}）
+            </p>
+          </div>
+          <StatusTag value="rejected" kind="review" />
+        </article>
         <article
           v-for="issue in store.issues.filter((item) => ['risk_acceptance_expired', 'control_failed', 'missing_evidence'].includes(item.kind))"
           :key="issue.id"
@@ -229,6 +273,18 @@ const submitAcceptance = (): void => {
 
 .risk-tag {
   margin-left: 7px;
+}
+
+.invalid-hint {
+  margin-top: 4px;
+  color: #b42318;
+  font-size: 10px;
+}
+
+.basis-note {
+  margin-top: 5px;
+  color: #8a6d3b;
+  font-size: 11px;
 }
 
 .selected-risk {
