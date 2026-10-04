@@ -127,6 +127,22 @@ const decisionLabel = (decision: DecisionType | 'pending'): string =>
       </div>
     </section>
 
+    <section v-if="latestVersion?.batchConclusion" class="batch-context">
+      <div class="batch-context-head">
+        <i class="pi pi-send"></i>
+        <div>
+          <strong>本会签批次来自交换包导入：{{ latestVersion.batchConclusion.packageName }}</strong>
+          <p>与版本差异页读取同一份批次结论，冲突已逐条双版确认后才进入会签。</p>
+        </div>
+      </div>
+      <div class="batch-context-stats">
+        <div><span>写入/确认</span><strong>{{ latestVersion.batchConclusion.applied }}</strong></div>
+        <div><span>一致跳过</span><strong>{{ latestVersion.batchConclusion.skipped }}</strong></div>
+        <div><span>冲突确认</span><strong>{{ latestVersion.batchConclusion.conflicts }}</strong></div>
+        <div><span>接受失效重算</span><strong>{{ latestVersion.batchConclusion.invalidatedAcceptances.length }}</strong></div>
+      </div>
+    </section>
+
     <div class="review-board">
       <section class="review-list">
         <article
@@ -140,6 +156,9 @@ const decisionLabel = (decision: DecisionType | 'pending'): string =>
             <div>
               <span class="mono">{{ threat.code }}</span>
               <h2>{{ threat.title }}</h2>
+              <small v-if="latestVersion?.sourceBatchId" class="batch-flag">
+                <i class="pi pi-send"></i> 交换批次修订 r{{ threat.revision }}
+              </small>
             </div>
             <StatusTag :value="threat.reviewStatus" kind="review" />
           </div>
@@ -252,6 +271,67 @@ const decisionLabel = (decision: DecisionType | 'pending'): string =>
 .version-context span {
   color: #717c8f;
   font-size: 11px;
+}
+
+.batch-context {
+  display: grid;
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr);
+  gap: 14px;
+  padding: 14px 16px;
+  border: 1px solid #cfe0d6;
+  border-radius: 7px;
+  background: #f3faf6;
+}
+
+.batch-context-head {
+  display: flex;
+  gap: 10px;
+}
+
+.batch-context-head i {
+  margin-top: 3px;
+  color: #2f8f69;
+}
+
+.batch-context-head p {
+  margin: 4px 0 0;
+  color: #5f6a7e;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.batch-context-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.batch-context-stats > div {
+  display: grid;
+  gap: 4px;
+  align-content: center;
+  padding: 8px 10px;
+  border-radius: 5px;
+  background: #fff;
+}
+
+.batch-context-stats span {
+  color: #717c8f;
+  font-size: 10px;
+}
+
+.batch-context-stats strong {
+  font-size: 16px;
+}
+
+.batch-flag {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 4px;
+  color: #2f8f69;
+  font-size: 10px;
+  font-weight: 600;
 }
 
 .review-board {

@@ -48,8 +48,13 @@ const submitAcceptance = (): void => {
   }
   store.acceptRisk(selectedRiskId.value, acceptanceForm.expiresAt, acceptanceForm.condition)
   acceptanceVisible.value = false
-  toast.add({ severity: 'success', summary: '风险接受已记录', detail: '已写入审计轨迹', life: 2500 })
+  toast.add({ severity: 'success', summary: '风险接受已记录', detail: '已按当前威胁/证据指纹留存依据', life: 2500 })
 }
+
+const riskCode = (riskId: string): string =>
+  store.data.risks.find((risk) => risk.id === riskId)?.code ?? riskId
+const riskTitle = (riskId: string): string =>
+  store.data.risks.find((risk) => risk.id === riskId)?.title ?? '（风险已移除）'
 </script>
 
 <template>
@@ -130,7 +135,7 @@ const submitAcceptance = (): void => {
       <aside class="validation-panel">
         <h2>风险校验</h2>
         <article
-          v-for="issue in store.issues.filter((item) => ['risk_acceptance_expired', 'control_failed', 'missing_evidence'].includes(item.kind))"
+          v-for="issue in store.issues.filter((item) => ['risk_acceptance_expired', 'risk_acceptance_invalidated', 'control_failed', 'missing_evidence'].includes(item.kind))"
           :key="issue.id"
           class="validation-item"
           :class="{ error: issue.severity === 'critical' || issue.severity === 'high' }"
@@ -144,6 +149,46 @@ const submitAcceptance = (): void => {
         </article>
       </aside>
     </div>
+
+    <section class="panel">
+      <div class="panel-header">
+        <h2 class="panel-title">风险接受台账（依据随威胁/证据变化自动失效，历史依据保留）</h2>
+        <span class="muted">{{ store.data.acceptances.length }} 条记录</span>
+      </div>
+      <DataTable :value="store.data.acceptances" dataKey="id" size="small" stripedRows>
+        <Column header="风险" style="width: 200px">
+          <template #body="{ data }">
+            <strong>{{ riskCode(data.riskId) }}</strong>
+            <div class="muted">{{ riskTitle(data.riskId) }}</div>
+          </template>
+        </Column>
+        <Column header="状态" style="width: 100px">
+          <template #body="{ data }">
+            <StatusTag :value="data.status === 'active' ? 'active' : 'invalidated'" kind="status" />
+          </template>
+        </Column>
+        <Column field="condition" header="接受条件" />
+        <Column field="expiresAt" header="到期日" style="width: 110px" />
+        <Column header="依据" style="width: 230px">
+          <template #body="{ data }">
+            <div class="basis-cell">
+              <span>威胁：{{ data.basisDetail?.threatSummary.map((t: any) => t.code).join('、') || '—' }}</span>
+              <span>证据：{{ data.basisDetail?.evidenceSummary.length ?? 0 }} 份</span>
+              <span class="mono">{{ data.source === 'import' ? '交换批次 ' + data.sourceBatchId?.slice(0, 14) : '人工会签' }}</span>
+            </div>
+          </template>
+        </Column>
+        <Column header="失效说明" style="width: 220px">
+          <template #body="{ data }">
+            <div v-if="data.status === 'invalidated'" class="invalidated-cell">
+              <strong>{{ data.invalidatedReason }}</strong>
+              <span class="muted">{{ data.invalidatedAt ? new Date(data.invalidatedAt).toLocaleString('zh-CN') : '' }}</span>
+            </div>
+            <span v-else class="muted">生效中</span>
+          </template>
+        </Column>
+      </DataTable>
+    </section>
 
     <Dialog v-model:visible="acceptanceVisible" header="记录风险接受" modal :style="{ width: '620px' }">
       <div v-if="selectedRisk" class="selected-risk">
@@ -249,5 +294,19 @@ const submitAcceptance = (): void => {
 .acceptance-form {
   display: grid;
   gap: 16px;
+}
+
+.basis-cell {
+  display: grid;
+  gap: 3px;
+  font-size: 11px;
+  color: #5f6a7e;
+}
+
+.invalidated-cell {
+  display: grid;
+  gap: 3px;
+  color: #b42318;
+  font-size: 11px;
 }
 </style>

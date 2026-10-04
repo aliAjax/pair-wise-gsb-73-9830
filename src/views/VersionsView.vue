@@ -148,6 +148,20 @@ const approvalLabel = (snapshot: VersionSnapshot): string =>
       </div>
       <div class="changed-list">
         <h4>重新审核差异</h4>
+        <div v-if="toVersion?.batchConclusion" class="batch-conclusion">
+          <div class="conclusion-head">
+            <i class="pi pi-send"></i>
+            <strong>交换批次结论（会签中心读取同一批次）</strong>
+          </div>
+          <div class="conclusion-grid">
+            <div><span>包名</span><strong>{{ toVersion.batchConclusion.packageName }}</strong></div>
+            <div><span>包内条目</span><strong>{{ toVersion.batchConclusion.incoming }}</strong></div>
+            <div><span>写入/确认</span><strong>{{ toVersion.batchConclusion.applied }}</strong></div>
+            <div><span>一致跳过</span><strong>{{ toVersion.batchConclusion.skipped }}</strong></div>
+            <div><span>冲突双版确认</span><strong>{{ toVersion.batchConclusion.conflicts }}</strong></div>
+            <div><span>失效重算接受</span><strong class="danger-text">{{ toVersion.batchConclusion.invalidatedAcceptances.length }}</strong></div>
+          </div>
+        </div>
         <div v-for="item in difference.changed" :key="item" class="changed-item">
           <i class="pi pi-arrow-right"></i>
           <span>{{ item }}</span>
@@ -161,9 +175,12 @@ const approvalLabel = (snapshot: VersionSnapshot): string =>
           <h2 class="panel-title">版本历史</h2>
         </div>
         <DataTable :value="store.data.versions" dataKey="id" size="small" stripedRows>
-          <Column header="版本" style="width: 180px">
+          <Column header="版本" style="width: 200px">
             <template #body="{ data }">
               <strong>{{ data.label }}</strong>
+              <div v-if="data.sourceBatchId" class="batch-source">
+                <i class="pi pi-send"></i> 交换批次定稿
+              </div>
               <div class="mono">r{{ data.revision }}</div>
             </template>
           </Column>
@@ -314,6 +331,53 @@ const approvalLabel = (snapshot: VersionSnapshot): string =>
 .changed-item i {
   color: #4c78a8;
   font-size: 10px;
+}
+
+.batch-conclusion {
+  margin-bottom: 12px;
+  padding: 12px 14px;
+  border: 1px solid #cfe0d6;
+  border-radius: 6px;
+  background: #f3faf6;
+}
+
+.conclusion-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+  color: #2f684f;
+  font-size: 13px;
+}
+
+.conclusion-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.conclusion-grid > div {
+  display: grid;
+  gap: 3px;
+}
+
+.conclusion-grid span {
+  color: #6d788c;
+  font-size: 11px;
+}
+
+.conclusion-grid strong {
+  font-size: 14px;
+}
+
+.batch-source {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin: 3px 0;
+  color: #2f8f69;
+  font-size: 11px;
+  font-weight: 600;
 }
 
 .versions-grid {

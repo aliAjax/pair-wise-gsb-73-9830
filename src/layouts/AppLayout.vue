@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useConfirm } from 'primevue/useconfirm'
 import Button from 'primevue/button'
@@ -7,6 +8,11 @@ import { useThreatModelStore } from '@/stores/threatModel'
 const router = useRouter()
 const confirm = useConfirm()
 const store = useThreatModelStore()
+
+onMounted(() => {
+  // 重开页面：写入中断的批次自动从完整检查点续做；冲突待确认批次保持等待
+  store.resumeOnLoad()
+})
 
 const navigation = [
   { label: '工作台', icon: 'pi pi-chart-line', to: '/' },
@@ -17,6 +23,7 @@ const navigation = [
   { label: '会签中心', icon: 'pi pi-verified', to: '/reviews' },
   { label: '版本差异', icon: 'pi pi-code', to: '/versions' },
   { label: '控制证据', icon: 'pi pi-folder-open', to: '/evidence' },
+  { label: '交换包导入', icon: 'pi pi-send', to: '/imports' },
   { label: '导出报告', icon: 'pi pi-file-export', to: '/report' },
 ]
 
@@ -78,6 +85,17 @@ const reset = (): void => {
         </div>
       </header>
       <section class="content-shell">
+        <div v-if="store.activeBatch" class="batch-banner" @click="void router.push('/imports')">
+          <i class="pi pi-send"></i>
+          <span>
+            交换批次「{{ store.activeBatch.packageName }}」
+            <template v-if="store.activeBatch.status === 'awaiting_confirmation'">有冲突条目两版待确认</template>
+            <template v-else-if="store.activeBatch.status === 'failed'">写入失败，可从检查点续做</template>
+            <template v-else>正在处理中</template>
+            （点击查看）
+          </span>
+          <strong>{{ store.activeBatch.items.filter((item) => ['applied', 'identical', 'resolution_applied'].includes(item.status)).length }}/{{ store.activeBatch.items.length }}</strong>
+        </div>
         <RouterView />
       </section>
     </main>
@@ -231,5 +249,28 @@ const reset = (): void => {
 .content-shell {
   max-width: 1560px;
   padding: 24px;
+}
+
+.batch-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 16px;
+  padding: 10px 14px;
+  border: 1px solid #e3c98f;
+  border-radius: 6px;
+  color: #7c5510;
+  background: #fff8e6;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.batch-banner i {
+  font-size: 14px;
+}
+
+.batch-banner strong {
+  margin-left: auto;
+  font-size: 12px;
 }
 </style>

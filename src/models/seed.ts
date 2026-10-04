@@ -500,6 +500,7 @@ export const createSeedState = (): ThreatModelState => ({
       owner: '数据治理组',
       acceptanceExpiresAt: '2026-10-01',
       acceptanceCondition: '过渡期内按日抽检导出记录，发现异常立即冻结账号。',
+      activeAcceptanceId: 'acc-01',
     },
     {
       id: 'risk-04',
@@ -515,5 +516,27 @@ export const createSeedState = (): ThreatModelState => ({
   decisions,
   versions: baselineVersions,
   audit,
+  acceptances: [
+    {
+      id: 'acc-01',
+      riskId: 'risk-03',
+      status: 'active',
+      expiresAt: '2026-10-01',
+      condition: '过渡期内按日抽检导出记录，发现异常立即冻结账号。',
+      actor: '宋雨',
+      createdAt: '2026-09-10T09:00:00+08:00',
+      basisFingerprint: 'seed:thr-03:ctl-03:ctl-04:ev-03:ev-04',
+      basisDetail: {
+        threatSummary: [
+          { id: 'thr-03', code: 'TM-003', title: '敏感数据批量导出', revision: 2 },
+        ],
+        evidenceSummary: [
+          { id: 'ev-03', title: '越权访问扫描报告', reference: 'APPSCAN-8891', valid: true, expiresAt: '2026-12-04' },
+          { id: 'ev-04', title: '导出操作双人复核记录', reference: 'ATT-2026-91', valid: true, expiresAt: '2027-03-12' },
+        ],
+      },
+      source: 'manual',
+    },
+  ],
   currentRevision: 2,
 })

@@ -9,6 +9,7 @@ import type {
   VersionDifference,
   VersionSnapshot,
 } from '@/models/domain'
+import { riskBasisFingerprint } from '@/services/riskBasis'
 
 const TODAY = new Date('2026-09-29T00:00:00+08:00')
 
@@ -101,6 +102,39 @@ export const getValidationIssues = (state: ThreatModelState): ValidationIssue[] 
         detail: `接受到期日为 ${risk.acceptanceExpiresAt ?? '未设置'}，需要重新评审或转为处置。`,
         entityId: risk.id,
       })
+    })
+
+  // 已失效接受（威胁或证据变化导致）：旧依据保留，但风险必须重算处置
+  state.acceptances
+    .filter((record) => record.status === 'invalidated')
+    .forEach((record) => {
+      const risk = state.risks.find((item) => item.id === record.riskId)
+      issues.push({
+        id: `acceptance-invalidated-${record.id}`,
+        kind: 'risk_acceptance_invalidated',
+        severity: risk ? riskLevel(riskScore(risk)) : 'high',
+        title: `${risk?.code ?? record.riskId} 风险接受因依据变化已失效`,
+        detail: `${record.invalidatedReason ?? '关联威胁或证据已变化'}；原接受条件「${record.condition}」与依据已留存，等待重新确认。`,
+        entityId: record.riskId,
+      })
+    })
+
+  // 防御性校验：仍标记 accepted 但依据指纹已不匹配（正常路径会被立即重算）
+  state.risks
+    .filter((risk) => risk.status === 'accepted')
+    .forEach((risk) => {
+      const record = state.acceptances.find((item) => item.id === risk.activeAcceptanceId)
+      if (!record || record.status !== 'active') return
+      if (record.basisFingerprint && record.basisFingerprint !== riskBasisFingerprint(state, risk.id)) {
+        issues.push({
+          id: `acceptance-stale-${risk.id}`,
+          kind: 'risk_acceptance_invalidated',
+          severity: riskLevel(riskScore(risk)),
+          title: `${risk.code} 风险接受依据已变化`,
+          detail: '关联威胁或控制证据已变化，风险接受应立即失效并重算。',
+          entityId: risk.id,
+        })
+      }
     })
 
   const taskGroups = new Map<string, typeof state.mitigations>()
